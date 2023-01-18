@@ -91,6 +91,8 @@ if not blender280:
 # Find the Blender output file
 import os
 outfile = os.getenv("UNITY_BLENDER_EXPORTER_OUTPUT_FILE")
+if not outfile:
+    outfile = "./DebugLocal.fbx"
 
 # Do the conversion
 print("Starting blender to FBX conversion " + outfile)
@@ -108,8 +110,8 @@ if blender280:
         use_mesh_modifiers=True,
         mesh_smooth_type='OFF',
         use_custom_props=True,
-        bake_anim_use_nla_strips=False,
-        bake_anim_use_all_actions=False,
+        bake_anim_use_nla_strips=True,
+        bake_anim_use_all_actions=True,
         apply_scale_options='FBX_SCALE_ALL')
 elif blender249:
     mtx4_x90n = Blender.Mathutils.RotationMatrix(-90, 4, 'x')

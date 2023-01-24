@@ -7,11 +7,18 @@ blender280 = (2,80,0) <= bpy.app.version
 # FUNCTION TO APPLY ALL SHARED MODIFIERS
 #
 def ApplySharedModifiers():
-    #start by OBJECT mode and deselect all
+    
+    #start by OBJECT mode 
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    collections = bpy.data.collections
+    cLen = len(collections)    
     objs = bpy.data.objects
+    #objs = bpy.data.collections[0].all_objects
     oLen = len(objs)
+    print("Will look for shared modifiers in "+str(objs)+" objects and "+str(cLen)+" collections")
     #1. Group by shared mesh data
-    groups = {}
+    meshDataList = {}
     for obj in objs:
 
         if obj.data is None:
@@ -20,49 +27,64 @@ def ApplySharedModifiers():
 
         meshDataName = obj.data.name
 
-        if not groups.get(meshDataName):
-            groups[meshDataName] = [] 
+        if not meshDataList.get(meshDataName):
+            meshDataList[meshDataName] = [] 
             print("Shared Mesh "+meshDataName)
             
-        groups[meshDataName].append(obj)
+        meshDataList[meshDataName].append(obj)
         print("\tAdd object"+obj.name)
         
-    #2. Keep groups with shared only data and modifiers.
-    for groupName in groups:
+    #2. Keep meshDataList with shared only data and modifiers.
+    for meshDataName in meshDataList:
         # check same modifiers
-        group = groups[groupName]
-        mainObject = group[0]
-        modifiers = mainObject.modifiers
-        print("Checking shared "+groupName)
+        meshDataRef = meshDataList[meshDataName]
+        meshData = meshDataRef[0]
+        modifiers = meshData.modifiers
+        
+        #meshDataName are kept in blend files even if no object are referencing them. Check that before trying to select them.
+        isInView = False
+        for view in bpy.context.view_layer.objects:
+            isInView |= view.name == meshData.name
+
+        if not isInView:
+            print("Ignore Mesh Data as not attached to any object in view : "+meshData.name)
+            continue        
+        
+        print("Checking mesh data "+meshDataName)
+                
         groupValid = ''
         for modifier in modifiers:
             print("\tChecking modifier "+modifier.name)
-            for obj in group[1:]:
+            for obj in meshDataRef[1:]:
               if obj.modifiers.find(modifier.name) == -1:
                   groupValid = obj.name+"."+modifier.name
                   break
+        
         if not groupValid == '': 
             print("\tNot Shared "+groupValid)
             continue       
-             
+
+        #If there is no shared modifiers on same named mesh we should return to avoid blender import issues.     
         if len(modifiers) == 0:
-            print("\tNo modifier on "+mainObject.name)
+            print("\tNo modifier on "+meshData.name)
             continue   
-              
-        #3. Apply to geometry modifiers on first group data    
-        bpy.context.view_layer.objects.active = mainObject
-        mainObject.select_set(state=True)
+
+    
+
+        #3. Apply to geometry modifiers on first meshData data    
+        bpy.context.view_layer.objects.active = meshData
+        meshData.select_set(state=True)
         bpy.ops.object.mode_set(mode='OBJECT')
         #low level convert
         depGraph = bpy.context.evaluated_depsgraph_get()        
         bm = bmesh.new()
-        bm.from_object(mainObject, depGraph)
-        bm.to_mesh(mainObject.data)
+        bm.from_object(meshData, depGraph)
+        bm.to_mesh(meshData.data)
         
-        mainObject.select_set(state=False)
+        meshData.select_set(state=False)
         
         #4. clean modifiers for other
-        for obj in group:
+        for obj in meshDataRef:
             #print("\tobj.modifiers.clear()")
             obj.modifiers.clear()
 
@@ -97,8 +119,12 @@ if not outfile:
 # Do the conversion
 print("Starting blender to FBX conversion " + outfile)
 
-#APPLY ALL SHARED MODIFIERS
-ApplySharedModifiers()
+#TRY APPLY ALL SHARED MODIFIERS
+try:
+    ApplySharedModifiers()
+except exception:
+    print("Couldn't apply modifiers, see exception below. Will continue with default behaviour") 
+    print(exception) 
 
 if blender280:
     import bpy.ops
